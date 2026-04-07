@@ -154,7 +154,7 @@ python scripts/demo_rag.py --question "What is the Model Context Protocol?"
 
 ```bash
 python main.py
-# API docs: http://localhost:8000/docs
+# API docs: http://localhost:9000/docs
 ```
 
 ### 6. Start the MCP server (separate terminal)
@@ -240,7 +240,7 @@ docker-compose up --build
 ```
 
 Services:
-- **api** → http://localhost:8000
+- **api** → http://localhost:9000
 - **mcp_server** → http://localhost:8001
 - **chromadb** → http://localhost:8002
 
