@@ -85,11 +85,15 @@ class RAGPipeline:
 
         # Optionally wrap with multi-query
         if self.enable_query_expansion:
-            from src.rag.query_expansion import build_multi_query_retriever
-            self.retriever = build_multi_query_retriever(
-                base_retriever=self.retriever,
-                llm=self.llm,
-            )
+            try:
+                from src.rag.query_expansion import build_multi_query_retriever
+                self.retriever = build_multi_query_retriever(
+                    base_retriever=self.retriever,
+                    llm=self.llm,
+                )
+            except Exception as _e:
+                logger.warning("Query expansion disabled (import/init error): %s", _e)
+                self.enable_query_expansion = False
 
         # Optionally wrap with contextual compression
         if self.enable_compression:
@@ -110,8 +114,12 @@ class RAGPipeline:
             docs = rerank(question, docs, top_n=settings.RERANK_TOP_N)
 
         context = _format_context(docs)
-        chain = self.prompt | self.llm | StrOutputParser()
-        answer = chain.invoke({"question": question, "context": context})
+        try:
+            chain = self.prompt | self.llm | StrOutputParser()
+            answer = chain.invoke({"question": question, "context": context})
+        except Exception as _e:
+            logger.warning("LLM answer generation failed (%s) — returning retrieved content", _e)
+            answer = _fallback_answer(docs)
 
         return RAGResponse(
             answer=answer,
@@ -135,8 +143,12 @@ class RAGPipeline:
             )
 
         context = _format_context(docs)
-        chain = self.prompt | self.llm | StrOutputParser()
-        answer = await chain.ainvoke({"question": question, "context": context})
+        try:
+            chain = self.prompt | self.llm | StrOutputParser()
+            answer = await chain.ainvoke({"question": question, "context": context})
+        except Exception as _e:
+            logger.warning("LLM answer generation failed (%s) — returning retrieved content", _e)
+            answer = _fallback_answer(docs)
 
         return RAGResponse(
             answer=answer,
@@ -244,3 +256,16 @@ def _extract_sources(docs: list[Document]) -> list[dict[str, Any]]:
                 "snippet": doc.page_content[:200],
             })
     return sources
+
+
+def _fallback_answer(docs: list[Document]) -> str:
+    """Return a plain-text answer assembled from retrieved chunks when the LLM is unavailable."""
+    if not docs:
+        return "No relevant content found. Please ingest documents first."
+    parts = ["[No LLM configured — showing retrieved content directly]\n"]
+    for i, doc in enumerate(docs, 1):
+        source = doc.metadata.get("source", "unknown")
+        title = doc.metadata.get("title", "")
+        header = f"**[{i}] {title or source}**"
+        parts.append(f"{header}\n{doc.page_content.strip()}")
+    return "\n\n---\n\n".join(parts)

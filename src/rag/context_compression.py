@@ -30,8 +30,8 @@ def build_llm_extractor_retriever(
     For each retrieved chunk, asks the LLM to extract only the sentences
     that are directly relevant to the query. Returns a ContextualCompressionRetriever.
     """
-    from langchain.retrievers import ContextualCompressionRetriever
-    from langchain.retrievers.document_compressors import LLMChainExtractor
+    from langchain_classic.retrievers.contextual_compression import ContextualCompressionRetriever
+    from langchain_classic.retrievers.document_compressors import LLMChainExtractor
 
     from src.llm.base import build_llm
 
@@ -55,8 +55,8 @@ def build_embedding_filter_retriever(
     similarity to the query — purely local, no extra LLM calls.
     Fast and cheap but less nuanced than LLM-based compression.
     """
-    from langchain.retrievers import ContextualCompressionRetriever
-    from langchain.retrievers.document_compressors import EmbeddingsFilter
+    from langchain_classic.retrievers.contextual_compression import ContextualCompressionRetriever
+    from langchain_classic.retrievers.document_compressors import EmbeddingsFilter
 
     from src.rag.embeddings import build_embedding_model
 
@@ -84,8 +84,8 @@ def build_pipeline_compressor_retriever(
 
     Running cheap filters first reduces the number of LLM calls needed.
     """
-    from langchain.retrievers import ContextualCompressionRetriever
-    from langchain.retrievers.document_compressors import (
+    from langchain_classic.retrievers.contextual_compression import ContextualCompressionRetriever
+    from langchain_classic.retrievers.document_compressors import (
         DocumentCompressorPipeline,
         EmbeddingsFilter,
         LLMChainFilter,

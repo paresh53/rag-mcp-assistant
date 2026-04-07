@@ -42,7 +42,7 @@ def build_multi_query_retriever(
         llm:            LLM used to generate sub-queries. Defaults to configured LLM.
         num_queries:    How many paraphrases to generate.
     """
-    from langchain.retrievers.multi_query import MultiQueryRetriever
+    from langchain_classic.retrievers.multi_query import MultiQueryRetriever
 
     from src.llm.base import build_llm
 

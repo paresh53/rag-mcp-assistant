@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RAG Assistant</title>
+  <!-- Marked.js for markdown rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- Highlight.js for code syntax highlighting -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --accent: #2ea043;
+      --accent-dim: #1a4226;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --user-bg: #1c2233;
+      --ai-bg: #161b22;
+      --code-bg: #0d1117;
+      --source-bg: #1c2233;
+      --radius: 12px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    header .logo {
+      width: 32px; height: 32px;
+      background: var(--accent);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+    header h1 { font-size: 16px; font-weight: 600; }
+    header .subtitle { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+    .header-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    .status-text { font-size: 12px; color: var(--text-muted); }
+
+    /* ── Layout ── */
+    .main { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 260px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+    .sidebar h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 4px; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    label { font-size: 13px; color: var(--text-muted); }
+    select, input[type="range"], input[type="number"] {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 13px;
+      width: 100%;
+      outline: none;
+    }
+    select:focus, input:focus { border-color: var(--accent); }
+    .range-row { display: flex; align-items: center; gap: 8px; }
+    .range-row input[type="range"] { flex: 1; accent-color: var(--accent); padding: 0; }
+    .range-val { font-size: 13px; color: var(--accent); min-width: 20px; text-align: right; }
+    .toggle-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .toggle-row:last-child { border-bottom: none; }
+    .toggle-label { font-size: 13px; }
+    .toggle {
+      position: relative; width: 36px; height: 20px;
+      cursor: pointer;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; inset: 0;
+      background: var(--border);
+      border-radius: 20px;
+      transition: .2s;
+    }
+    .slider:before {
+      content: ""; position: absolute;
+      width: 14px; height: 14px;
+      left: 3px; top: 3px;
+      background: white; border-radius: 50%;
+      transition: .2s;
+    }
+    .toggle input:checked + .slider { background: var(--accent); }
+    .toggle input:checked + .slider:before { transform: translateX(16px); }
+
+    .clear-btn {
+      background: none; border: 1px solid var(--border);
+      color: var(--text-muted); border-radius: 6px;
+      padding: 8px; font-size: 12px; cursor: pointer;
+      transition: .15s; margin-top: auto;
+    }
+    .clear-btn:hover { border-color: #f85149; color: #f85149; }
+
+    /* ── Chat area ── */
+    .chat-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .messages {
+      flex: 1; overflow-y: auto;
+      padding: 20px;
+      display: flex; flex-direction: column; gap: 16px;
+      scroll-behavior: smooth;
+    }
+    .messages::-webkit-scrollbar { width: 6px; }
+    .messages::-webkit-scrollbar-track { background: transparent; }
+    .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ── Welcome state ── */
+    .welcome {
+      margin: auto;
+      text-align: center;
+      max-width: 480px;
+    }
+    .welcome .icon { font-size: 48px; margin-bottom: 16px; }
+    .welcome h2 { font-size: 22px; font-weight: 600; margin-bottom: 8px; }
+    .welcome p { color: var(--text-muted); font-size: 14px; line-height: 1.6; }
+    .example-questions { display: flex; flex-direction: column; gap: 8px; margin-top: 20px; }
+    .example-q {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 14px;
+      font-size: 13px; text-align: left; cursor: pointer;
+      transition: .15s; color: var(--text);
+    }
+    .example-q:hover { border-color: var(--accent); background: var(--accent-dim); }
+
+    /* ── Message bubbles ── */
+    .message { display: flex; gap: 12px; max-width: 100%; }
+    .message.user { flex-direction: row-reverse; }
+    .avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; flex-shrink: 0;
+    }
+    .message.user .avatar { background: #1f6feb; }
+    .message.ai .avatar { background: var(--accent-dim); }
+    .bubble {
+      max-width: calc(100% - 52px);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      line-height: 1.65;
+      font-size: 14px;
+    }
+    .message.user .bubble {
+      background: var(--user-bg);
+      border: 1px solid #1f6feb40;
+      border-top-right-radius: 4px;
+    }
+    .message.ai .bubble {
+      background: var(--ai-bg);
+      border: 1px solid var(--border);
+      border-top-left-radius: 4px;
+      min-width: 200px;
+    }
+
+    /* ── Markdown content ── */
+    .bubble h1,.bubble h2,.bubble h3 { margin: 12px 0 6px; color: var(--text); }
+    .bubble h1 { font-size: 18px; }
+    .bubble h2 { font-size: 16px; }
+    .bubble h3 { font-size: 14px; }
+    .bubble p { margin-bottom: 10px; }
+    .bubble p:last-child { margin-bottom: 0; }
+    .bubble ul, .bubble ol { padding-left: 20px; margin-bottom: 10px; }
+    .bubble li { margin-bottom: 4px; }
+    .bubble a { color: #58a6ff; text-decoration: none; }
+    .bubble a:hover { text-decoration: underline; }
+    .bubble strong { color: var(--text); }
+    .bubble blockquote {
+      border-left: 3px solid var(--accent);
+      padding-left: 12px;
+      color: var(--text-muted);
+      margin: 8px 0;
+    }
+
+    /* ── Code blocks ── */
+    .bubble pre {
+      background: var(--code-bg) !important;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin: 10px 0;
+      overflow: hidden;
+    }
+    .code-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 6px 12px;
+      background: #1c2233;
+      border-bottom: 1px solid var(--border);
+    }
+    .code-lang { font-size: 11px; color: var(--text-muted); font-family: monospace; }
+    .copy-btn {
+      background: none; border: none; color: var(--text-muted);
+      font-size: 11px; cursor: pointer; padding: 2px 6px;
+      border-radius: 4px; transition: .15s;
+    }
+    .copy-btn:hover { background: var(--border); color: var(--text); }
+    .copy-btn.copied { color: var(--accent); }
+    .bubble pre code {
+      display: block; padding: 12px 14px !important;
+      font-size: 13px; line-height: 1.6;
+      font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+    }
+    .bubble code:not(pre code) {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 12px;
+      font-family: monospace;
+      color: #e3b341;
+    }
+
+    /* ── Sources ── */
+    .sources {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+    }
+    .sources-title {
+      font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.5px; color: var(--text-muted);
+      margin-bottom: 8px; display: flex; align-items: center; gap: 4px;
+    }
+    .source-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .source-chip {
+      background: var(--source-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 11px;
+      color: var(--text-muted);
+      max-width: 220px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: default;
+      transition: .15s;
+    }
+    .source-chip:hover { border-color: var(--accent); color: var(--text); }
+
+    /* ── Meta info ── */
+    .meta-row {
+      display: flex; gap: 8px; flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .meta-badge {
+      font-size: 10px; padding: 2px 8px;
+      border-radius: 20px;
+      background: var(--accent-dim);
+      color: var(--accent);
+      border: 1px solid #2ea04340;
+    }
+
+    /* ── Thinking indicator ── */
+    .thinking { display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 13px; }
+    .dots span {
+      display: inline-block; width: 6px; height: 6px;
+      background: var(--accent); border-radius: 50%;
+      animation: bounce 1.2s infinite;
+    }
+    .dots span:nth-child(2) { animation-delay: 0.2s; }
+    .dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-6px)} }
+
+    /* ── Input bar ── */
+    .input-bar {
+      padding: 16px 20px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: flex; gap: 10px; align-items: flex-end;
+      flex-shrink: 0;
+    }
+    .input-wrap {
+      flex: 1; position: relative;
+    }
+    textarea {
+      width: 100%;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 14px;
+      padding: 12px 14px;
+      resize: none;
+      outline: none;
+      font-family: inherit;
+      line-height: 1.5;
+      min-height: 46px;
+      max-height: 160px;
+      transition: border-color .15s;
+    }
+    textarea:focus { border-color: var(--accent); }
+    textarea::placeholder { color: var(--text-muted); }
+    .send-btn {
+      width: 44px; height: 44px;
+      background: var(--accent);
+      border: none; border-radius: 10px;
+      color: white; font-size: 18px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: .15s; flex-shrink: 0;
+    }
+    .send-btn:hover:not(:disabled) { background: #3fb950; transform: translateY(-1px); }
+    .send-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+    .input-hint { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+
+    /* ── Error ── */
+    .error-bubble {
+      background: #2d1417;
+      border: 1px solid #f8514940;
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: #f85149;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <div class="logo">🤖</div>
+  <div>
+    <h1>RAG Assistant</h1>
+    <div class="subtitle">Powered by GPT-4 · ChromaDB · LangChain</div>
+  </div>
+  <div class="header-right">
+    <div class="status-dot" id="statusDot"></div>
+    <span class="status-text" id="statusText">Connecting…</span>
+  </div>
+</header>
+
+<div class="main">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div>
+      <h3>Retrieval Settings</h3>
+    </div>
+
+    <div class="form-group">
+      <label for="strategySelect">Strategy</label>
+      <select id="strategySelect">
+        <option value="mmr">MMR (Maximal Marginal Relevance)</option>
+        <option value="similarity">Similarity</option>
+        <option value="hybrid">Hybrid</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Documents to retrieve (k = <span id="kVal">5</span>)</label>
+      <div class="range-row">
+        <input type="range" id="kRange" min="1" max="20" value="5" />
+        <span class="range-val" id="kValBig">5</span>
+      </div>
+    </div>
+
+    <div>
+      <h3>Pipeline Options</h3>
+    </div>
+
+    <div>
+      <div class="toggle-row">
+        <span class="toggle-label">Query Expansion</span>
+        <label class="toggle">
+          <input type="checkbox" id="toggleExpansion" checked />
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">Re-ranking</span>
+        <label class="toggle">
+          <input type="checkbox" id="toggleRerank" checked />
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">Compression</span>
+        <label class="toggle">
+          <input type="checkbox" id="toggleCompression" />
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="collectionInput">Collection (optional)</label>
+      <input type="text" id="collectionInput" placeholder="default" style="padding:6px 10px" />
+    </div>
+
+    <button class="clear-btn" onclick="clearChat()">🗑 Clear conversation</button>
+  </div>
+
+  <!-- Chat -->
+  <div class="chat-area">
+    <div class="messages" id="messages">
+      <div class="welcome" id="welcome">
+        <div class="icon">💬</div>
+        <h2>Ask me anything</h2>
+        <p>I search through indexed documents and generate answers with source references. Try one of these:</p>
+        <div class="example-questions">
+          <button class="example-q" onclick="sendExample(this)">How to create a document in FileNet?</button>
+          <button class="example-q" onclick="sendExample(this)">What are the steps to upload a document?</button>
+          <button class="example-q" onclick="sendExample(this)">Explain the FileNet P8 platform architecture</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="input-bar">
+      <div class="input-wrap">
+        <textarea
+          id="questionInput"
+          placeholder="Ask a question… (Enter to send, Shift+Enter for new line)"
+          rows="1"
+        ></textarea>
+      </div>
+      <button class="send-btn" id="sendBtn" onclick="sendQuery()" title="Send (Enter)">
+        ➤
+      </button>
+    </div>
+    <div style="padding: 0 20px 10px; display:flex; justify-content:space-between">
+      <span class="input-hint" id="hintText"></span>
+      <span class="input-hint">Enter ↵ to send</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ── Config ──────────────────────────────────────────────────────────────
+  const API_BASE = window.location.origin + "/gotoassistant";
+
+  // ── Marked config ───────────────────────────────────────────────────────
+  marked.setOptions({
+    breaks: true,
+    gfm: true,
+    highlight: null,
+  });
+
+  // Custom renderer for code blocks with copy button
+  const renderer = new marked.Renderer();
+  renderer.code = function(code, lang) {
+    const language = lang || "plaintext";
+    const highlighted = hljs.getLanguage(language)
+      ? hljs.highlight(code, { language }).value
+      : hljs.highlightAuto(code).value;
+    const id = "code-" + Math.random().toString(36).slice(2);
+    return `<pre><div class="code-header">
+      <span class="code-lang">${language}</span>
+      <button class="copy-btn" onclick="copyCode('${id}', this)">Copy</button>
+    </div><code id="${id}" class="hljs language-${language}">${highlighted}</code></pre>`;
+  };
+  marked.use({ renderer });
+
+  // ── Health check ─────────────────────────────────────────────────────────
+  async function checkHealth() {
+    try {
+      const r = await fetch(API_BASE + "/health", { signal: AbortSignal.timeout(5000) });
+      const ok = r.ok;
+      document.getElementById("statusDot").style.background = ok ? "var(--accent)" : "#f85149";
+      document.getElementById("statusText").textContent = ok ? "Connected" : "API Error";
+    } catch {
+      document.getElementById("statusDot").style.background = "#f85149";
+      document.getElementById("statusText").textContent = "Offline";
+    }
+  }
+  checkHealth();
+
+  // ── Range slider ─────────────────────────────────────────────────────────
+  document.getElementById("kRange").addEventListener("input", function() {
+    document.getElementById("kVal").textContent = this.value;
+    document.getElementById("kValBig").textContent = this.value;
+  });
+
+  // ── Auto-resize textarea ──────────────────────────────────────────────────
+  const ta = document.getElementById("questionInput");
+  ta.addEventListener("input", function() {
+    this.style.height = "auto";
+    this.style.height = Math.min(this.scrollHeight, 160) + "px";
+  });
+  ta.addEventListener("keydown", function(e) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendQuery();
+    }
+  });
+
+  // ── Utilities ────────────────────────────────────────────────────────────
+  function copyCode(id, btn) {
+    const code = document.getElementById(id)?.innerText;
+    if (!code) return;
+    navigator.clipboard.writeText(code).then(() => {
+      btn.textContent = "Copied!";
+      btn.classList.add("copied");
+      setTimeout(() => { btn.textContent = "Copy"; btn.classList.remove("copied"); }, 2000);
+    });
+  }
+
+  function clearChat() {
+    const msgs = document.getElementById("messages");
+    msgs.innerHTML = `<div class="welcome" id="welcome">
+      <div class="icon">💬</div>
+      <h2>Ask me anything</h2>
+      <p>I search through indexed documents and generate answers with source references. Try one of these:</p>
+      <div class="example-questions">
+        <button class="example-q" onclick="sendExample(this)">How to create a document in FileNet?</button>
+        <button class="example-q" onclick="sendExample(this)">What are the steps to upload a document?</button>
+        <button class="example-q" onclick="sendExample(this)">Explain the FileNet P8 platform architecture</button>
+      </div>
+    </div>`;
+  }
+
+  function sendExample(btn) {
+    document.getElementById("questionInput").value = btn.textContent;
+    sendQuery();
+  }
+
+  function hideWelcome() {
+    const w = document.getElementById("welcome");
+    if (w) w.remove();
+  }
+
+  function scrollToBottom() {
+    const m = document.getElementById("messages");
+    m.scrollTop = m.scrollHeight;
+  }
+
+  function appendMessage(role, content) {
+    hideWelcome();
+    const msgs = document.getElementById("messages");
+    const div = document.createElement("div");
+    div.className = `message ${role}`;
+
+    const emoji = role === "user" ? "👤" : "🤖";
+    div.innerHTML = `
+      <div class="avatar">${emoji}</div>
+      <div class="bubble" id="bubble-${Date.now()}">${content}</div>
+    `;
+    msgs.appendChild(div);
+    scrollToBottom();
+    return div.querySelector(".bubble");
+  }
+
+  function appendThinking() {
+    hideWelcome();
+    const msgs = document.getElementById("messages");
+    const div = document.createElement("div");
+    div.className = "message ai";
+    div.id = "thinking";
+    div.innerHTML = `
+      <div class="avatar">🤖</div>
+      <div class="bubble">
+        <div class="thinking">
+          <div class="dots"><span></span><span></span><span></span></div>
+          Searching and generating answer…
+        </div>
+      </div>
+    `;
+    msgs.appendChild(div);
+    scrollToBottom();
+    return div;
+  }
+
+  // ── Build answer HTML ─────────────────────────────────────────────────────
+  function buildAnswerHTML(data) {
+    const answerMd = marked.parse(data.answer || "No answer returned.");
+
+    let sourcesHTML = "";
+    if (data.sources && data.sources.length > 0) {
+      const chips = data.sources.map(s => {
+        const label = s.source ? s.source.split("/").pop() : "Unknown";
+        const title = s.snippet ? s.snippet.slice(0, 120) + "…" : s.source;
+        return `<div class="source-chip" title="${escapeHtml(title)}">${escapeHtml(label)}</div>`;
+      }).join("");
+      sourcesHTML = `
+        <div class="sources">
+          <div class="sources-title">📎 Sources (${data.sources.length})</div>
+          <div class="source-chips">${chips}</div>
+        </div>`;
+    }
+
+    const badges = [];
+    if (data.retrieval_strategy) badges.push(`Strategy: ${data.retrieval_strategy}`);
+    if (data.reranked) badges.push("Re-ranked");
+    if (data.compressed) badges.push("Compressed");
+    const metaHTML = badges.length
+      ? `<div class="meta-row">${badges.map(b => `<span class="meta-badge">${b}</span>`).join("")}</div>`
+      : "";
+
+    return answerMd + sourcesHTML + metaHTML;
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+
+  // ── Main query ────────────────────────────────────────────────────────────
+  let isLoading = false;
+
+  async function sendQuery() {
+    if (isLoading) return;
+    const input = document.getElementById("questionInput");
+    const question = input.value.trim();
+    if (!question) return;
+
+    isLoading = true;
+    const sendBtn = document.getElementById("sendBtn");
+    sendBtn.disabled = true;
+    input.value = "";
+    input.style.height = "auto";
+
+    // Show user message
+    appendMessage("user", escapeHtml(question));
+
+    // Show thinking
+    const thinkingEl = appendThinking();
+
+    const hint = document.getElementById("hintText");
+    hint.textContent = "Querying…";
+
+    const body = {
+      question,
+      strategy: document.getElementById("strategySelect").value,
+      k: parseInt(document.getElementById("kRange").value),
+      enable_rerank: document.getElementById("toggleRerank").checked,
+      enable_compression: document.getElementById("toggleCompression").checked,
+      enable_query_expansion: document.getElementById("toggleExpansion").checked,
+      collection: document.getElementById("collectionInput").value.trim(),
+    };
+
+    try {
+      const response = await fetch(API_BASE + "/rag/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(60000),
+      });
+
+      thinkingEl.remove();
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        appendMessage("ai", `<div class="error-bubble">⚠️ Error ${response.status}: ${escapeHtml(err.detail || err.error || "Unknown error")}</div>`);
+        hint.textContent = "Request failed.";
+      } else {
+        const data = await response.json();
+        appendMessage("ai", buildAnswerHTML(data));
+        hint.textContent = `Done · ${data.sources?.length ?? 0} source(s) found`;
+      }
+    } catch (err) {
+      thinkingEl.remove();
+      const msg = err.name === "TimeoutError"
+        ? "Request timed out after 60s. Try a simpler question."
+        : escapeHtml(err.message || "Network error");
+      appendMessage("ai", `<div class="error-bubble">⚠️ ${msg}</div>`);
+      hint.textContent = "Error occurred.";
+    } finally {
+      isLoading = false;
+      sendBtn.disabled = false;
+      input.focus();
+    }
+  }
+</script>
+</body>
+</html>

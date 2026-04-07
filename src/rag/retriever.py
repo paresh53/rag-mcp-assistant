@@ -115,8 +115,8 @@ def _build_hybrid_retriever(
     Dense embeddings excel at semantic / paraphrase matching.
     Together they cover both failure modes.
     """
-    from langchain.retrievers import EnsembleRetriever
     from langchain_community.retrievers import BM25Retriever
+    from langchain_classic.retrievers.ensemble import EnsembleRetriever
 
     from src.rag.vector_store import as_langchain_retriever
 

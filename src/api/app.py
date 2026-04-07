@@ -10,7 +10,8 @@ from contextlib import asynccontextmanager
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from src.config import settings
 
@@ -44,8 +45,10 @@ def create_app() -> FastAPI:
         ),
         version="0.1.0",
         lifespan=lifespan,
+        root_path="/gotoassistant",
         docs_url="/docs",
         redoc_url="/redoc",
+        servers=[{"url": "/gotoassistant", "description": "GotoAssistant API"}],
     )
 
     # CORS — allow all origins in development, restrict in production
@@ -67,6 +70,15 @@ def create_app() -> FastAPI:
     app.include_router(documents_router, prefix="/documents", tags=["Documents"])
     app.include_router(rag_router, prefix="/rag", tags=["RAG"])
     app.include_router(mcp_router, prefix="/mcp", tags=["MCP"])
+
+    # Serve the chat UI at root
+    import pathlib
+    static_dir = pathlib.Path(__file__).parent / "static"
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+    @app.get("/", include_in_schema=False)
+    async def ui():
+        return FileResponse(static_dir / "index.html")
 
     # Global exception handler
     @app.exception_handler(Exception)
