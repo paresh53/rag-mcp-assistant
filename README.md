@@ -6,6 +6,8 @@ A production-ready Python project demonstrating **all key concepts** of:
 
 Built with FastAPI, LangChain, ChromaDB, and the official Anthropic MCP SDK.
 
+> **Chat UI** is available at `http://localhost:9000/gotoassistant/` — ask questions, see answers with syntax-highlighted code and source references, all from your browser.
+
 ---
 
 ## Architecture
@@ -95,7 +97,9 @@ rag-mcp-assistant/
 │   │   ├── prompts.py               # 4 MCP prompt templates
 │   │   └── client.py                # MCP client (stdio + SSE)
 │   └── api/
-│       ├── app.py                   # FastAPI application factory
+│       ├── app.py                   # FastAPI application factory (root: /gotoassistant)
+│       ├── static/
+│       │   └── index.html           # Chat UI (served at /gotoassistant/)
 │       └── routes/
 │           ├── health.py            # /health, /ready
 │           ├── documents.py         # /documents/* (ingest, stats)
@@ -124,10 +128,12 @@ rag-mcp-assistant/
 
 ### 1. Clone and install
 
+> **Python 3.12+** is supported. If you get a `BackendUnavailable` error, run `pip install --upgrade setuptools pip` first.
+
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/paresh53/rag-mcp-assistant.git
 cd rag-mcp-assistant
-python -m venv .venv && source .venv/bin/activate
+pip install --upgrade setuptools pip
 pip install -e ".[dev]"
 ```
 
@@ -135,26 +141,38 @@ pip install -e ".[dev]"
 
 ```bash
 cp .env.example .env
-# Edit .env — at minimum set OPENAI_API_KEY (or use Ollama for local)
+# Edit .env — set OPENAI_API_KEY (get one at https://platform.openai.com/api-keys)
 ```
 
-### 3. Ingest sample documents
+### 3. Start the API server
 
+```bash
+python main.py
+```
+
+Then open:
+- **Chat UI** → `http://localhost:9000/gotoassistant/`
+- **Swagger docs** → `http://localhost:9000/gotoassistant/docs`
+- **Health check** → `http://localhost:9000/gotoassistant/health`
+
+### 4. Ingest documents
+
+Indexing a URL (e.g. IBM FileNet docs):
+```bash
+curl -X POST http://localhost:9000/gotoassistant/documents/ingest/url \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://www.ibm.com/docs/en/filenet-p8-platform/5.2.0?topic=documents-working"}'
+```
+
+Or from the command line:
 ```bash
 python scripts/ingest_documents.py data/documents/
 ```
 
-### 4. Run a quick demo
+### 5. Run a quick demo
 
 ```bash
 python scripts/demo_rag.py --question "What is the Model Context Protocol?"
-```
-
-### 5. Start the API server
-
-```bash
-python main.py
-# API docs: http://localhost:9000/docs
 ```
 
 ### 6. Start the MCP server (separate terminal)
@@ -193,33 +211,60 @@ Claude Desktop will then have access to all 8 tools and 5 resources.
 
 ---
 
+## Chat UI
+
+A built-in browser-based chat interface is served at `GET /gotoassistant/`.
+
+**Features:**
+- Ask questions in natural language and get answers with formatted markdown
+- Syntax-highlighted code blocks with one-click **Copy** button
+- Source chips showing which documents each answer came from
+- Sidebar controls: retrieval strategy (MMR / Similarity / Hybrid), number of docs (k), query expansion, re-ranking, and compression toggles
+- Live connection status indicator
+- Example starter questions on the welcome screen
+
+---
+
 ## API Endpoints
+
+All endpoints are prefixed with `/gotoassistant`. Full interactive docs at `/gotoassistant/docs`.
+
+### UI
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/gotoassistant/` | Chat UI |
+
+### Health
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/gotoassistant/health` | Liveness check |
+| GET | `/gotoassistant/ready` | Readiness check |
 
 ### Documents
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/documents/ingest/url` | Ingest a URL |
-| POST | `/documents/ingest/file` | Upload and ingest a file |
-| GET | `/documents/stats` | Vector store statistics |
-| DELETE | `/documents/collection` | Clear a collection |
+| POST | `/gotoassistant/documents/ingest/url` | Ingest a URL |
+| POST | `/gotoassistant/documents/ingest/file` | Upload and ingest a file |
+| GET | `/gotoassistant/documents/stats` | Vector store statistics |
+| DELETE | `/gotoassistant/documents/collection` | Clear a collection |
 
 ### RAG
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/rag/query` | Full RAG query (all strategies) |
-| POST | `/rag/query/stream` | Streaming RAG (SSE) |
-| POST | `/rag/query/conversational` | Multi-turn conversational RAG |
-| GET | `/rag/search` | Raw vector search (no generation) |
+| POST | `/gotoassistant/rag/query` | Full RAG query (all strategies) |
+| POST | `/gotoassistant/rag/query/stream` | Streaming RAG (SSE) |
+| POST | `/gotoassistant/rag/query/conversational` | Multi-turn conversational RAG |
+| GET | `/gotoassistant/rag/search` | Raw vector search (no generation) |
 
 ### MCP Bridge
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/mcp/tools` | List all MCP tools |
-| POST | `/mcp/tools/call` | Call any MCP tool |
-| GET | `/mcp/resources` | List all MCP resources |
-| GET | `/mcp/resources/read` | Read a resource by URI |
-| GET | `/mcp/prompts` | List all MCP prompts |
-| POST | `/mcp/prompts/get` | Get a filled prompt |
+| GET | `/gotoassistant/mcp/tools` | List all MCP tools |
+| POST | `/gotoassistant/mcp/tools/call` | Call any MCP tool |
+| GET | `/gotoassistant/mcp/resources` | List all MCP resources |
+| GET | `/gotoassistant/mcp/resources/read` | Read a resource by URI |
+| GET | `/gotoassistant/mcp/prompts` | List all MCP prompts |
+| POST | `/gotoassistant/mcp/prompts/get` | Get a filled prompt |
 
 ---
 
@@ -240,9 +285,9 @@ docker-compose up --build
 ```
 
 Services:
-- **api** → http://localhost:9000
-- **mcp_server** → http://localhost:8001
-- **chromadb** → http://localhost:8002
+- **api** → http://localhost:9000 (Chat UI at `/gotoassistant/`)
+- **mcp_server** → http://localhost:9001
+- **chromadb** → http://localhost:9002
 
 ---
 
@@ -262,7 +307,8 @@ All settings are read from environment variables or `.env`:
 | `RERANK_TOP_N` | `3` | Documents after reranking |
 | `QUERY_EXPANSION_ENABLED` | `true` | Enable multi-query expansion |
 | `MCP_TRANSPORT` | `sse` | `stdio` \| `sse` |
-| `MCP_PORT` | `8001` | MCP SSE server port |
+| `API_PORT` | `9000` | API server port |
+| `MCP_PORT` | `9001` | MCP SSE server port |
 
 ---
 
