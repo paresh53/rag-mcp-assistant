@@ -4,7 +4,7 @@ All values are read from environment variables or a .env file.
 """
 from __future__ import annotations
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -54,7 +54,12 @@ class Settings(BaseSettings):
 
     # ── API Server ────────────────────────────────────────────────────────────
     API_HOST: str = "0.0.0.0"
-    API_PORT: int = 9000
+    # Cloud platforms (Railway, Render, Fly.io) inject PORT at runtime.
+    # AliasChoices tries PORT first, then API_PORT, then falls back to 9000.
+    API_PORT: int = Field(
+        default=9000,
+        validation_alias=AliasChoices("PORT", "API_PORT"),
+    )
     API_LOG_LEVEL: str = "info"
 
 

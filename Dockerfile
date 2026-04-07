@@ -19,4 +19,5 @@ COPY . .
 
 EXPOSE 9000
 
-CMD ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "${PORT:-9000}"]
+# Shell form so ${PORT:-9000} is expanded at runtime (required by Railway)
+CMD sh -c "uvicorn src.api.app:app --host 0.0.0.0 --port ${PORT:-9000}"

@@ -1,193 +1,219 @@
 # RAG + MCP Assistant
 
-A production-ready Python project demonstrating **all key concepts** of:
-- **RAG** (Retrieval-Augmented Generation)
-- **MCP** (Model Context Protocol)
+A production-ready RAG (Retrieval-Augmented Generation) assistant with a browser-based chat UI.  
+Paste any URL or upload a document → ask questions → get accurate, sourced answers powered by OpenAI.
 
-Built with FastAPI, LangChain, ChromaDB, and the official Anthropic MCP SDK.
-
-> **Chat UI** is available at `http://localhost:9000/gotoassistant/` — ask questions, see answers with syntax-highlighted code and source references, all from your browser.
+**Live demo (once deployed):** `https://<your-app>.up.railway.app/gotoassistant/`
 
 ---
 
-## Architecture
+## What it does
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                        RAG Pipeline                           │
-│                                                              │
-│  Documents → Loader → Splitter → Embeddings → Vector Store  │
-│                                      ↓                       │
-│  Query → [Query Expansion] → Retriever → [Reranker] →        │
-│          [Contextual Compressor] → LLM → Answer + Sources   │
-└──────────────────────────────────────────────────────────────┘
-                          ↑ ↓
-┌──────────────────────────────────────────────────────────────┐
-│                       MCP Server                             │
-│                                                              │
-│  Tools     → search_documents, ask_question, ingest_document │
-│  Resources → documents://list, collection://stats           │
-│  Prompts   → rag_answer, document_analysis, qa_evaluation   │
-│  Sampling  → request LLM inference via MCP client           │
-└──────────────────────────────────────────────────────────────┘
-```
+1. **Crawl & ingest any website** — paste a URL (including JavaScript-rendered docs like IBM Docs, React/Angular SPAs) and the system learns the entire site automatically using a headless Chromium crawler.
+2. **Upload files** — PDF, DOCX, TXT, Markdown, HTML.
+3. **Ask questions** — the RAG pipeline retrieves the most relevant chunks and uses GPT-4o-mini to generate a grounded answer with source references.
+4. **Streaming answers** — responses stream word-by-word in the chat UI.
+5. **MCP Server** — exposes all tools/resources to Claude Desktop and other MCP clients.
 
 ---
 
-## RAG Concepts Covered
+## Deploy on Railway (free, public URL in ~8 minutes)
 
-| Concept | File | Description |
+Railway gives you a permanent public URL like `https://rag-mcp-assistant-production.up.railway.app/gotoassistant/` at no cost.
+
+### Step 1 — Sign up on Railway
+
+Go to **railway.app** → click **"Start a New Project"** → sign in with GitHub.
+
+### Step 2 — Create a new project from your GitHub repo
+
+1. Click **"New Project"** → **"Deploy from GitHub repo"**
+2. Select `paresh53/rag-mcp-assistant`
+3. Railway detects the `Dockerfile` automatically and starts building (takes ~6-8 minutes first time)
+
+### Step 3 — Add environment variables
+
+While the build runs, click your service → **"Variables"** tab → add these one by one:
+
+| Variable | Value | Required? |
 |---|---|---|
-| Document Loading | `src/rag/document_loader.py` | PDF, TXT, DOCX, HTML, Markdown, Web URLs |
-| Text Splitting | `src/rag/text_splitter.py` | Recursive, Token-based, Semantic (embedding-aware) |
-| Embeddings | `src/rag/embeddings.py` | HuggingFace (local) + OpenAI, cosine similarity |
-| Vector Store | `src/rag/vector_store.py` | ChromaDB with persistence, batch indexing, metadata filters |
-| Retrieval Strategies | `src/rag/retriever.py` | Similarity (k-NN), MMR (diversity), Hybrid (BM25 + dense) |
-| Query Expansion | `src/rag/query_expansion.py` | Multi-Query + HyDE (Hypothetical Document Embeddings) |
-| Re-ranking | `src/rag/reranker.py` | FlashRank (local cross-encoder) + Cohere API |
-| Contextual Compression | `src/rag/context_compression.py` | EmbeddingsFilter, LLMChainExtractor, Pipeline compressor |
-| Full Pipeline | `src/rag/pipeline.py` | Sync, async, streaming, conversational (multi-turn) |
-| Prompt Templates | `src/llm/prompt_templates.py` | RAG answer, condense-question, summarise, Q&A generation |
+| `OPENAI_API_KEY` | `sk-...` (your key from platform.openai.com) | ✅ Yes |
+| `LLM_PROVIDER` | `openai` | ✅ Yes |
+| `LLM_MODEL` | `gpt-4o-mini` | ✅ Yes |
+| `EMBEDDING_PROVIDER` | `huggingface` | ✅ Yes |
+| `EMBEDDING_MODEL` | `BAAI/bge-small-en-v1.5` | ✅ Yes |
+| `CHROMA_PERSIST_DIR` | `/app/data/chroma_db` | ✅ Yes |
+| `API_HOST` | `0.0.0.0` | ✅ Yes |
+| `LLM_TEMPERATURE` | `0.0` | Optional |
+| `RETRIEVAL_STRATEGY` | `mmr` | Optional |
+| `RERANK_ENABLED` | `true` | Optional |
+| `QUERY_EXPANSION_ENABLED` | `true` | Optional |
 
-## MCP Concepts Covered
+> **Note:** Do NOT set `PORT` — Railway injects it automatically. Do NOT set `API_PORT` on Railway.
 
-| Concept | File | Description |
-|---|---|---|
-| MCP Server | `src/mcp/server.py` | FastMCP with lifespan, stdio & SSE transports |
-| Tools | `src/mcp/tools.py` | 8 tools with annotations (readOnly, destructive, idempotent) |
-| Resources | `src/mcp/resources.py` | Static + dynamic (URI template) resources |
-| Prompts | `src/mcp/prompts.py` | 4 reusable prompt templates with arguments |
-| MCP Client | `src/mcp/client.py` | Stdio + SSE client; list/call tools, read resources, get prompts |
-| Sampling | `src/mcp/server.py` | Server requests LLM inference from the MCP client |
-| Roots | `src/mcp/server.py` | Filesystem boundary declaration |
-| Resource Subscriptions | `src/mcp/client.py` | Subscribe to resource change notifications |
-| Logging | `src/mcp/server.py` | Structured logs forwarded to MCP client |
-| Tool Annotations | `src/mcp/tools.py` | readOnly, destructive, idempotent flags |
+After saving variables, Railway will redeploy automatically.
 
----
+### Step 4 — Generate a public domain
 
-## Project Structure
+1. In your service → **"Settings"** → **"Networking"**
+2. Click **"Generate Domain"**
+3. Copy your URL, e.g. `https://rag-mcp-assistant-production.up.railway.app`
 
-```
-rag-mcp-assistant/
-├── main.py                          # Entry point
-├── pyproject.toml                   # Dependencies
-├── docker-compose.yml               # Docker setup
-├── .env.example                     # Environment variables template
-│
-├── src/
-│   ├── config.py                    # Pydantic settings
-│   ├── rag/
-│   │   ├── document_loader.py       # Multi-format document loading
-│   │   ├── text_splitter.py         # Recursive / Token / Semantic splitting
-│   │   ├── embeddings.py            # HuggingFace + OpenAI embeddings
-│   │   ├── vector_store.py          # ChromaDB vector store
-│   │   ├── retriever.py             # Similarity / MMR / Hybrid retrieval
-│   │   ├── query_expansion.py       # Multi-Query + HyDE
-│   │   ├── reranker.py              # FlashRank + Cohere reranking
-│   │   ├── context_compression.py   # Contextual compression strategies
-│   │   └── pipeline.py              # Full RAG pipeline orchestrator
-│   ├── llm/
-│   │   ├── base.py                  # LLM factory (OpenAI / Anthropic / Ollama)
-│   │   └── prompt_templates.py      # Centralised prompt templates
-│   ├── mcp/
-│   │   ├── server.py                # FastMCP server (stdio + SSE)
-│   │   ├── tools.py                 # 8 MCP tools
-│   │   ├── resources.py             # 5 MCP resources
-│   │   ├── prompts.py               # 4 MCP prompt templates
-│   │   └── client.py                # MCP client (stdio + SSE)
-│   └── api/
-│       ├── app.py                   # FastAPI application factory (root: /gotoassistant)
-│       ├── static/
-│       │   └── index.html           # Chat UI (served at /gotoassistant/)
-│       └── routes/
-│           ├── health.py            # /health, /ready
-│           ├── documents.py         # /documents/* (ingest, stats)
-│           ├── rag.py               # /rag/* (query, stream, conversational)
-│           └── mcp.py               # /mcp/* (tools, resources, prompts)
-│
-├── data/
-│   └── documents/                   # Sample documents for ingestion
-│
-├── scripts/
-│   ├── ingest_documents.py          # CLI ingestion tool
-│   └── demo_rag.py                  # End-to-end demo script
-│
-└── tests/
-    ├── conftest.py                  # Shared fixtures
-    ├── test_api.py                  # FastAPI route tests
-    ├── test_rag/
-    │   └── test_pipeline.py         # RAG component tests
-    └── test_mcp/
-        └── test_server.py           # MCP tools/resources/prompts tests
-```
+**Your chat UI is live at:** `https://<your-domain>/gotoassistant/`
+
+### Step 5 (recommended) — Add a volume for persistent storage
+
+Without a volume, your ingested documents are lost on every redeploy.
+
+1. In Railway dashboard → your service → **"Add Volume"**
+2. Mount path: `/app/data`
+3. This keeps ChromaDB data across restarts and redeployments
 
 ---
 
-## Quick Start
+## Using the Chat UI
 
-### 1. Clone and install
+Open `https://<your-domain>/gotoassistant/` in any browser.
 
-> **Python 3.12+** is supported. If you get a `BackendUnavailable` error, run `pip install --upgrade setuptools pip` first.
+### Add knowledge (ingest documents)
+
+**From the sidebar → "Add Knowledge" panel:**
+
+1. **Crawl a website** — paste any URL (e.g. `https://www.ibm.com/docs/en/filenet-p8-platform/5.7.0`) → set max pages → click **"Crawl"**. Works on JavaScript SPAs (IBM Docs, React/Angular sites).
+
+2. **Single URL** — paste a direct page URL → click **"Add"**
+
+3. **Upload a file** — drag a PDF, DOCX, or TXT file onto the page or use the file picker (via API, see below)
+
+### Ask questions
+
+Type your question in the chat box and press **Enter** or click **Send**.
+
+**Sidebar controls** (affect answer quality):
+- **Strategy** — `MMR` (diverse results), `Similarity` (most relevant), `Hybrid` (BM25 + dense)
+- **k** — how many document chunks to retrieve (3–10)
+- **Query Expansion** — generates sub-queries to improve recall
+- **Reranking** — reorders retrieved chunks for better precision
+- **Compression** — strips irrelevant sentences from chunks before sending to LLM
+
+### Example starter questions
+
+After crawling IBM FileNet P8 docs:
+- *"What are the system requirements for FileNet P8 5.7.0?"*
+- *"How do I configure Content Engine security?"*
+- *"What changed in the 5.7.0 release notes?"*
+
+---
+
+## Run locally
+
+### Prerequisites
+
+- Python 3.11+
+- An OpenAI API key from [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+
+### Install
 
 ```bash
 git clone https://github.com/paresh53/rag-mcp-assistant.git
 cd rag-mcp-assistant
 pip install --upgrade setuptools pip
 pip install -e ".[dev]"
+pip install playwright && python -m playwright install chromium
 ```
 
-### 2. Configure
+### Configure
 
 ```bash
 cp .env.example .env
-# Edit .env — set OPENAI_API_KEY (get one at https://platform.openai.com/api-keys)
+# Open .env and set OPENAI_API_KEY=sk-...
 ```
 
-### 3. Start the API server
+### Start
 
 ```bash
 python main.py
 ```
 
-Then open:
-- **Chat UI** → `http://localhost:9000/gotoassistant/`
-- **Swagger docs** → `http://localhost:9000/gotoassistant/docs`
-- **Health check** → `http://localhost:9000/gotoassistant/health`
+Open:
+- **Chat UI** → http://localhost:9000/gotoassistant/
+- **API docs** → http://localhost:9000/gotoassistant/docs
+- **Health check** → http://localhost:9000/gotoassistant/health
 
-### 4. Ingest documents
+### Ingest via command line
 
-Indexing a URL (e.g. IBM FileNet docs):
 ```bash
-curl -X POST http://localhost:9000/gotoassistant/documents/ingest/url \
-  -H "Content-Type: application/json" \
-  -d '{"url": "https://www.ibm.com/docs/en/filenet-p8-platform/5.2.0?topic=documents-working"}'
-```
-
-Or from the command line:
-```bash
+# Ingest a folder of documents
 python scripts/ingest_documents.py data/documents/
-```
 
-### 5. Run a quick demo
-
-```bash
-python scripts/demo_rag.py --question "What is the Model Context Protocol?"
-```
-
-### 6. Start the MCP server (separate terminal)
-
-```bash
-# Over SSE (HTTP):
-MCP_TRANSPORT=sse python -m src.mcp.server
-
-# Over stdio (for Claude Desktop):
-MCP_TRANSPORT=stdio python -m src.mcp.server
+# Run a quick demo
+python scripts/demo_rag.py --question "What is RAG?"
 ```
 
 ---
 
-## Using with Claude Desktop
+## Run with Docker (local)
+
+```bash
+# Copy and edit your env file first
+cp .env.example .env   # set OPENAI_API_KEY
+
+docker-compose up --build
+```
+
+Services:
+- **Chat UI** → http://localhost:9000/gotoassistant/
+- **MCP Server** → http://localhost:9001
+- **ChromaDB** → http://localhost:9002
+
+---
+
+## API Reference
+
+All endpoints are prefixed with `/gotoassistant`. Interactive docs at `/gotoassistant/docs`.
+
+### Chat / RAG
+| Method | Path | Description |
+|---|---|---|
+| POST | `/gotoassistant/rag/query` | Ask a question (full response) |
+| POST | `/gotoassistant/rag/query/stream` | Ask a question (streaming SSE) |
+| POST | `/gotoassistant/rag/query/conversational` | Multi-turn chat |
+| GET | `/gotoassistant/rag/search` | Raw vector search (no LLM) |
+
+### Documents
+| Method | Path | Description |
+|---|---|---|
+| POST | `/gotoassistant/documents/ingest/url` | Ingest a single URL |
+| POST | `/gotoassistant/documents/ingest/crawl` | Crawl an entire website (SSE progress stream) |
+| POST | `/gotoassistant/documents/ingest/file` | Upload and ingest a file |
+| GET | `/gotoassistant/documents/stats` | Vector store statistics |
+| DELETE | `/gotoassistant/documents/collection` | Clear a collection |
+
+### Health
+| Method | Path | Description |
+|---|---|---|
+| GET | `/gotoassistant/health` | Liveness |
+| GET | `/gotoassistant/ready` | Readiness |
+
+### Example: ingest a URL via curl
+
+```bash
+curl -X POST https://<your-domain>/gotoassistant/documents/ingest/url \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://docs.python.org/3/library/asyncio.html"}'
+```
+
+### Example: ask a question via curl
+
+```bash
+curl -X POST https://<your-domain>/gotoassistant/rag/query \
+  -H "Content-Type: application/json" \
+  -d '{"question": "How does asyncio work?", "collection": ""}'
+```
+
+---
+
+## Use with Claude Desktop (MCP)
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
@@ -207,108 +233,48 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
-Claude Desktop will then have access to all 8 tools and 5 resources.
+Claude Desktop gains access to all 8 RAG tools and 5 resources.
 
 ---
 
-## Chat UI
+## Architecture
 
-A built-in browser-based chat interface is served at `GET /gotoassistant/`.
-
-**Features:**
-- Ask questions in natural language and get answers with formatted markdown
-- Syntax-highlighted code blocks with one-click **Copy** button
-- Source chips showing which documents each answer came from
-- Sidebar controls: retrieval strategy (MMR / Similarity / Hybrid), number of docs (k), query expansion, re-ranking, and compression toggles
-- Live connection status indicator
-- Example starter questions on the welcome screen
-
----
-
-## API Endpoints
-
-All endpoints are prefixed with `/gotoassistant`. Full interactive docs at `/gotoassistant/docs`.
-
-### UI
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/gotoassistant/` | Chat UI |
-
-### Health
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/gotoassistant/health` | Liveness check |
-| GET | `/gotoassistant/ready` | Readiness check |
-
-### Documents
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/gotoassistant/documents/ingest/url` | Ingest a URL |
-| POST | `/gotoassistant/documents/ingest/file` | Upload and ingest a file |
-| GET | `/gotoassistant/documents/stats` | Vector store statistics |
-| DELETE | `/gotoassistant/documents/collection` | Clear a collection |
-
-### RAG
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/gotoassistant/rag/query` | Full RAG query (all strategies) |
-| POST | `/gotoassistant/rag/query/stream` | Streaming RAG (SSE) |
-| POST | `/gotoassistant/rag/query/conversational` | Multi-turn conversational RAG |
-| GET | `/gotoassistant/rag/search` | Raw vector search (no generation) |
-
-### MCP Bridge
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/gotoassistant/mcp/tools` | List all MCP tools |
-| POST | `/gotoassistant/mcp/tools/call` | Call any MCP tool |
-| GET | `/gotoassistant/mcp/resources` | List all MCP resources |
-| GET | `/gotoassistant/mcp/resources/read` | Read a resource by URI |
-| GET | `/gotoassistant/mcp/prompts` | List all MCP prompts |
-| POST | `/gotoassistant/mcp/prompts/get` | Get a filled prompt |
-
----
-
-## Running Tests
-
-```bash
-pytest -v
-# With coverage:
-pytest --cov=src --cov-report=html
+```
+┌──────────────────────────────────────────────────────────────┐
+│                        RAG Pipeline                           │
+│  Documents → Loader → Splitter → Embeddings → ChromaDB       │
+│                                      ↓                       │
+│  Query → [Query Expansion] → Retriever → [Reranker] →        │
+│          [Contextual Compressor] → LLM → Answer + Sources    │
+└──────────────────────────────────────────────────────────────┘
+                          ↑ ↓
+┌──────────────────────────────────────────────────────────────┐
+│                       MCP Server                             │
+│  Tools: search_documents, ask_question, ingest_document      │
+│  Resources: documents://list, collection://stats             │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Docker
-
-```bash
-docker-compose up --build
-```
-
-Services:
-- **api** → http://localhost:9000 (Chat UI at `/gotoassistant/`)
-- **mcp_server** → http://localhost:9001
-- **chromadb** → http://localhost:9002
-
----
-
-## Configuration Reference
-
-All settings are read from environment variables or `.env`:
+## Configuration reference
 
 | Variable | Default | Description |
 |---|---|---|
+| `OPENAI_API_KEY` | — | **Required.** Get from platform.openai.com |
 | `LLM_PROVIDER` | `openai` | `openai` \| `anthropic` \| `ollama` |
 | `LLM_MODEL` | `gpt-4o-mini` | Model name |
-| `OPENAI_API_KEY` | — | Required for OpenAI |
+| `LLM_TEMPERATURE` | `0.0` | Response creativity (0=factual, 1=creative) |
 | `EMBEDDING_PROVIDER` | `huggingface` | `huggingface` \| `openai` |
-| `EMBEDDING_MODEL` | `BAAI/bge-small-en-v1.5` | HuggingFace model name |
+| `EMBEDDING_MODEL` | `BAAI/bge-small-en-v1.5` | Local embedding model (free) |
+| `CHROMA_PERSIST_DIR` | `./data/chroma_db` | Vector DB storage path |
 | `RETRIEVAL_STRATEGY` | `mmr` | `similarity` \| `mmr` \| `hybrid` |
+| `RETRIEVAL_K` | `5` | Number of chunks to retrieve |
 | `RERANK_ENABLED` | `true` | Enable FlashRank reranking |
-| `RERANK_TOP_N` | `3` | Documents after reranking |
+| `RERANK_TOP_N` | `3` | Chunks kept after reranking |
 | `QUERY_EXPANSION_ENABLED` | `true` | Enable multi-query expansion |
-| `MCP_TRANSPORT` | `sse` | `stdio` \| `sse` |
-| `API_PORT` | `9000` | API server port |
-| `MCP_PORT` | `9001` | MCP SSE server port |
+| `API_PORT` | `9000` | Port (overridden by `PORT` on Railway/Render/Fly.io) |
+| `MCP_PORT` | `9001` | MCP server port |
 
 ---
 
