@@ -15,18 +15,20 @@ services:
   mcp_server:
     build: .
     ports:
-      - "8001:8001"
+      - "9001:9001"
     env_file: .env
     volumes:
       - ./data:/app/data
     depends_on:
       - chromadb
     command: python -m src.mcp.server
+    environment:
+      - MCP_PORT=9001
 
   chromadb:
     image: chromadb/chroma:latest
     ports:
-      - "8002:8000"
+      - "9002:8000"
     volumes:
       - chroma_data:/chroma/chroma
     environment:

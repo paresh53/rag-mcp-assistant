@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     MCP_SERVER_VERSION: str = "0.1.0"
     MCP_TRANSPORT: str = "sse"
     MCP_HOST: str = "0.0.0.0"
-    MCP_PORT: int = 8001
+    MCP_PORT: int = 9001
 
     # ── API Server ────────────────────────────────────────────────────────────
     API_HOST: str = "0.0.0.0"
