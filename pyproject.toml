@@ -43,6 +43,7 @@ dependencies = [
     # Reranking & search
     "rank-bm25>=0.2.2",
     "flashrank>=0.2.0",
+    "duckduckgo-search>=7.0.0",
 
     # MCP (Model Context Protocol) - official Anthropic SDK
     "mcp>=1.0.0",

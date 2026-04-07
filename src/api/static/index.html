@@ -6,8 +6,9 @@
   <title>RAG Assistant</title>
   <!-- Marked.js for markdown rendering -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <!-- Highlight.js for code syntax highlighting -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <!-- Highlight.js for code syntax highlighting (theme follows system color scheme) -->
+  <link rel="stylesheet" media="(prefers-color-scheme: dark)" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <link rel="stylesheet" media="(prefers-color-scheme: light)" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -23,8 +24,28 @@
       --user-bg: #1c2233;
       --ai-bg: #161b22;
       --code-bg: #0d1117;
+      --code-header-bg: #1c2233;
       --source-bg: #1c2233;
+      --error-bg: #2d1417;
       --radius: 12px;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #ffffff;
+        --surface: #f6f8fa;
+        --border: #d0d7de;
+        --accent: #1a7f37;
+        --accent-dim: #dafbe1;
+        --text: #1f2328;
+        --text-muted: #57606a;
+        --user-bg: #ddf4ff;
+        --ai-bg: #f6f8fa;
+        --code-bg: #f0f2f5;
+        --code-header-bg: #eaeef2;
+        --source-bg: #f6f8fa;
+        --error-bg: #ffebe9;
+      }
     }
 
     body {
@@ -155,7 +176,7 @@
       border-radius: 4px; padding: 4px 6px;
     }
     .ingest-status.ok  { color: var(--accent); background: var(--accent-dim); }
-    .ingest-status.err { color: #f85149; background: #2d1417; }
+    .ingest-status.err { color: #d1242f; background: var(--error-bg); }
     .ingest-status.loading { color: var(--text-muted); }
 
     /* progress bar */
@@ -284,7 +305,7 @@
     .code-header {
       display: flex; align-items: center; justify-content: space-between;
       padding: 6px 12px;
-      background: #1c2233;
+      background: var(--code-header-bg);
       border-bottom: 1px solid var(--border);
     }
     .code-lang { font-size: 11px; color: var(--text-muted); font-family: monospace; }
@@ -406,11 +427,11 @@
 
     /* ── Error ── */
     .error-bubble {
-      background: #2d1417;
-      border: 1px solid #f8514940;
+      background: var(--error-bg);
+      border: 1px solid #d1242f40;
       border-radius: 8px;
       padding: 10px 14px;
-      color: #f85149;
+      color: #d1242f;
       font-size: 13px;
     }
   </style>
@@ -457,6 +478,7 @@
       <div class="ingested-list" id="ingestedList"></div>
     </div>
 
+    <button class="clear-btn" style="margin-top:4px;color:#d1242f;border-color:#d1242f40" onclick="clearKnowledge()">🗑 Clear all knowledge</button>
     <button class="clear-btn" onclick="clearChat()">🗑 Clear conversation</button>
   </div>
 
@@ -468,9 +490,9 @@
         <h2>Ask me anything</h2>
         <p>I search through indexed documents and generate answers with source references. Try one of these:</p>
         <div class="example-questions">
-          <button class="example-q" onclick="sendExample(this)">How to create a document in FileNet?</button>
-          <button class="example-q" onclick="sendExample(this)">What are the steps to upload a document?</button>
-          <button class="example-q" onclick="sendExample(this)">Explain the FileNet P8 platform architecture</button>
+          <button class="example-q" onclick="sendExample(this)">What is this document about?</button>
+          <button class="example-q" onclick="sendExample(this)">Summarise the key points in the indexed content.</button>
+          <button class="example-q" onclick="sendExample(this)">What are the main topics covered?</button>
         </div>
       </div>
     </div>
@@ -565,9 +587,9 @@
       <h2>Ask me anything</h2>
       <p>I search through indexed documents and generate answers with source references. Try one of these:</p>
       <div class="example-questions">
-        <button class="example-q" onclick="sendExample(this)">How to create a document in FileNet?</button>
-        <button class="example-q" onclick="sendExample(this)">What are the steps to upload a document?</button>
-        <button class="example-q" onclick="sendExample(this)">Explain the FileNet P8 platform architecture</button>
+        <button class="example-q" onclick="sendExample(this)">What is this document about?</button>
+        <button class="example-q" onclick="sendExample(this)">Summarise the key points in the indexed content.</button>
+        <button class="example-q" onclick="sendExample(this)">What are the main topics covered?</button>
       </div>
     </div>`;
   }
@@ -630,9 +652,14 @@
     let sourcesHTML = "";
     if (data.sources && data.sources.length > 0) {
       const chips = data.sources.map(s => {
-        const label = s.source ? s.source.split("/").pop() : "Unknown";
-        const title = s.snippet ? s.snippet.slice(0, 120) + "…" : s.source;
-        return `<div class="source-chip" title="${escapeHtml(title)}">${escapeHtml(label)}</div>`;
+        const isWeb = data.web_searched;
+        const href = s.source || "";
+        const label = s.source ? (s.title || s.source.split("/").pop() || new URL(href).hostname) : "Unknown";
+        const tipText = s.snippet ? s.snippet.slice(0, 120) + "…" : s.source;
+        if (isWeb && href) {
+          return `<a class="source-chip" href="${escapeHtml(href)}" target="_blank" rel="noopener" title="${escapeHtml(tipText)}">🌐 ${escapeHtml(label)}</a>`;
+        }
+        return `<div class="source-chip" title="${escapeHtml(tipText)}">${escapeHtml(label)}</div>`;
       }).join("");
       sourcesHTML = `
         <div class="sources">
@@ -642,6 +669,7 @@
     }
 
     const badges = [];
+    if (data.web_searched) badges.push("🌐 Web Search");
     if (data.retrieval_strategy) badges.push(`Strategy: ${data.retrieval_strategy}`);
     if (data.reranked) badges.push("Re-ranked");
     if (data.compressed) badges.push("Compressed");
@@ -654,6 +682,24 @@
 
   function escapeHtml(s) {
     return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+
+  // ── Clear all knowledge (delete ChromaDB collection) ──────────────────────────
+  async function clearKnowledge() {
+    if (!confirm("Delete all indexed documents? This cannot be undone.")) return;
+    try {
+      const r = await fetch(API_BASE + "/documents/collection", { method: "DELETE" });
+      if (r.ok) {
+        document.getElementById("ingestedList").innerHTML = "";
+        document.getElementById("ingestStatus").textContent = "✓ All knowledge cleared";
+        document.getElementById("ingestStatus").className = "ingest-status ok";
+      } else {
+        const e = await r.json().catch(() => ({}));
+        alert("Failed: " + (e.detail || r.status));
+      }
+    } catch (err) {
+      alert("Error: " + err.message);
+    }
   }
 
   // ── URL Crawl + Ingestion ─────────────────────────────────────────────────

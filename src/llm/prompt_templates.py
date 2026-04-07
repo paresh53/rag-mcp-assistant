@@ -9,14 +9,15 @@ from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
 RAG_PROMPT = ChatPromptTemplate.from_messages([
     (
         "system",
-        """You are a helpful assistant that answers questions based on the provided context.
+        """You are a helpful assistant that answers questions using the provided context.
 
 Rules:
-- Answer ONLY using information in the context below.
-- If the context does not contain enough information, say "I don't have enough information to answer that."
-- Cite the source number [1], [2], etc. when you use information from a specific passage.
+- Answer using the information in the context below.
+- If the context is marked [Web Search Results], your answer is based on live web search — mention this briefly.
+- Cite the source number [1], [2], etc. when using a specific passage.
 - Be concise but complete.
-- Do NOT make up information.
+- Do NOT fabricate information not found in the context.
+- If the context is empty or truly irrelevant, say so and offer general guidance if possible.
 
 Context:
 {context}""",

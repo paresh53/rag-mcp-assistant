@@ -40,6 +40,7 @@ class RAGResponse:
     retrieval_strategy: str = ""
     reranked: bool = False
     compressed: bool = False
+    web_searched: bool = False
 
 
 # ── Pipeline ──────────────────────────────────────────────────────────────────
@@ -106,14 +107,27 @@ class RAGPipeline:
         """
         Run a full RAG query synchronously.
         Returns a RAGResponse with answer and source metadata.
+        Falls back to a web search when no documents are indexed.
         """
         docs = self.retriever.invoke(question)
+
+        web_searched = False
+        if not docs:
+            try:
+                from src.rag.web_search import search_web, web_results_to_docs
+                web_docs = web_results_to_docs(search_web(question))
+                if web_docs:
+                    docs = web_docs
+                    web_searched = True
+                    logger.info("No local docs found — using web search fallback (%d results)", len(docs))
+            except Exception as _e:
+                logger.warning("Web search fallback failed: %s", _e)
 
         if self.enable_rerank and docs:
             from src.rag.reranker import rerank
             docs = rerank(question, docs, top_n=settings.RERANK_TOP_N)
 
-        context = _format_context(docs)
+        context = _format_context(docs, web_searched=web_searched)
         try:
             chain = self.prompt | self.llm | StrOutputParser()
             answer = chain.invoke({"question": question, "context": context})
@@ -128,13 +142,28 @@ class RAGPipeline:
             retrieval_strategy=self.strategy.value,
             reranked=self.enable_rerank,
             compressed=self.enable_compression,
+            web_searched=web_searched,
         )
 
     # ── Async query ───────────────────────────────────────────────────────────
 
     async def aquery(self, question: str) -> RAGResponse:
-        """Async version of query()."""
+        """Async version of query(). Falls back to web search when no local docs found."""
         docs = await self.retriever.ainvoke(question)
+
+        web_searched = False
+        if not docs:
+            try:
+                from src.rag.web_search import search_web, web_results_to_docs
+                loop = asyncio.get_event_loop()
+                raw = await loop.run_in_executor(None, search_web, question)
+                web_docs = web_results_to_docs(raw)
+                if web_docs:
+                    docs = web_docs
+                    web_searched = True
+                    logger.info("No local docs found — using web search fallback (%d results)", len(docs))
+            except Exception as _e:
+                logger.warning("Web search fallback failed: %s", _e)
 
         if self.enable_rerank and docs:
             from src.rag.reranker import rerank
@@ -142,7 +171,7 @@ class RAGPipeline:
                 None, rerank, question, docs, settings.RERANK_TOP_N
             )
 
-        context = _format_context(docs)
+        context = _format_context(docs, web_searched=web_searched)
         try:
             chain = self.prompt | self.llm | StrOutputParser()
             answer = await chain.ainvoke({"question": question, "context": context})
@@ -157,6 +186,7 @@ class RAGPipeline:
             retrieval_strategy=self.strategy.value,
             reranked=self.enable_rerank,
             compressed=self.enable_compression,
+            web_searched=web_searched,
         )
 
     # ── Streaming ─────────────────────────────────────────────────────────────
@@ -228,17 +258,21 @@ class RAGPipeline:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _format_context(docs: list[Document]) -> str:
+def _format_context(docs: list[Document], *, web_searched: bool = False) -> str:
     """Format retrieved docs into a numbered context block for the prompt."""
     if not docs:
         return "No relevant context found."
+    header = "[Web Search Results]\n\n" if web_searched else ""
     parts = []
     for i, doc in enumerate(docs, 1):
         source = doc.metadata.get("source", "unknown")
         page = doc.metadata.get("page", "")
-        ref = f"{source}" + (f" (p.{page})" if page != "" else "")
+        title = doc.metadata.get("title", "")
+        ref = title or source
+        if page:
+            ref += f" (p.{page})"
         parts.append(f"[{i}] (Source: {ref})\n{doc.page_content.strip()}")
-    return "\n\n".join(parts)
+    return header + "\n\n".join(parts)
 
 
 def _extract_sources(docs: list[Document]) -> list[dict[str, Any]]:
