@@ -37,7 +37,7 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title="RAG + MCP Assistant",
+        title="GotoAssistant",
         description=(
             "A full-featured RAG (Retrieval-Augmented Generation) API with "
             "MCP (Model Context Protocol) server integration. "
