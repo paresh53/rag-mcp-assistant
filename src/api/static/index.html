@@ -125,9 +125,75 @@
       background: none; border: 1px solid var(--border);
       color: var(--text-muted); border-radius: 6px;
       padding: 8px; font-size: 12px; cursor: pointer;
-      transition: .15s; margin-top: auto;
+      transition: .15s;
     }
     .clear-btn:hover { border-color: #f85149; color: #f85149; }
+
+    /* ── Ingest panel ── */
+    .ingest-panel {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .ingest-url-row { display: flex; gap: 6px; margin-top: 6px; }
+    .ingest-url-row input {
+      flex: 1; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 6px;
+      color: var(--text); font-size: 12px; padding: 6px 8px; outline: none;
+    }
+    .ingest-url-row input:focus { border-color: var(--accent); }
+    .ingest-btn {
+      background: var(--accent); border: none; border-radius: 6px;
+      color: white; font-size: 12px; padding: 6px 10px;
+      cursor: pointer; white-space: nowrap; transition: .15s; flex-shrink: 0;
+    }
+    .ingest-btn:hover:not(:disabled) { background: #3fb950; }
+    .ingest-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .ingest-status {
+      margin-top: 6px; font-size: 11px; min-height: 16px;
+      border-radius: 4px; padding: 4px 6px;
+    }
+    .ingest-status.ok  { color: var(--accent); background: var(--accent-dim); }
+    .ingest-status.err { color: #f85149; background: #2d1417; }
+    .ingest-status.loading { color: var(--text-muted); }
+
+    /* progress bar */
+    .progress-wrap {
+      margin-top: 8px; display: none;
+    }
+    .progress-bar-track {
+      width: 100%; height: 6px;
+      background: var(--border); border-radius: 3px; overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%; background: var(--accent);
+      border-radius: 3px; width: 0%;
+      transition: width .3s ease;
+    }
+    .progress-label {
+      font-size: 10px; color: var(--text-muted);
+      margin-top: 4px; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+    .max-pages-row {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-top: 8px;
+    }
+    .max-pages-row label { font-size: 11px; color: var(--text-muted); }
+    .max-pages-row input {
+      width: 60px; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 4px;
+      color: var(--text); font-size: 12px; padding: 2px 6px; outline: none;
+      text-align: center;
+    }
+    .ingested-list { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; max-height: 120px; overflow-y: auto; }
+    .ingested-item {
+      font-size: 11px; color: var(--text-muted);
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 4px; padding: 4px 8px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
 
     /* ── Chat area ── */
     .chat-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
@@ -421,6 +487,30 @@
       <input type="text" id="collectionInput" placeholder="default" style="padding:6px 10px" />
     </div>
 
+    <!-- Add Knowledge section -->
+    <div>
+      <h3>Add Knowledge</h3>
+    </div>
+    <div class="ingest-panel">
+      <label style="font-size:12px;color:var(--text-muted)">Enter a top-level URL to crawl:</label>
+      <div class="ingest-url-row">
+        <input type="url" id="ingestUrlInput" placeholder="https://docs.example.com/" />
+        <button class="ingest-btn" id="ingestBtn" onclick="ingestURL()">Crawl</button>
+      </div>
+      <div class="max-pages-row">
+        <label for="maxPagesInput">Max pages to crawl</label>
+        <input type="number" id="maxPagesInput" value="60" min="1" max="500" />
+      </div>
+      <div class="progress-wrap" id="progressWrap">
+        <div class="progress-bar-track">
+          <div class="progress-bar-fill" id="progressFill"></div>
+        </div>
+        <div class="progress-label" id="progressLabel">Starting…</div>
+      </div>
+      <div class="ingest-status" id="ingestStatus"></div>
+      <div class="ingested-list" id="ingestedList"></div>
+    </div>
+
     <button class="clear-btn" onclick="clearChat()">🗑 Clear conversation</button>
   </div>
 
@@ -625,6 +715,115 @@
   function escapeHtml(s) {
     return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   }
+
+  // ── URL Crawl + Ingestion ─────────────────────────────────────────────────
+  const ingestedURLs = [];
+
+  async function ingestURL() {
+    const input = document.getElementById("ingestUrlInput");
+    const btn = document.getElementById("ingestBtn");
+    const status = document.getElementById("ingestStatus");
+    const progressWrap = document.getElementById("progressWrap");
+    const progressFill = document.getElementById("progressFill");
+    const progressLabel = document.getElementById("progressLabel");
+    const maxPages = parseInt(document.getElementById("maxPagesInput").value) || 60;
+
+    const url = input.value.trim();
+    if (!url) return;
+    if (!/^https?:\/\/.+/.test(url)) {
+      status.textContent = "⚠ Please enter a valid URL starting with http:// or https://";
+      status.className = "ingest-status err";
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Crawling…";
+    status.textContent = "";
+    status.className = "ingest-status";
+    progressWrap.style.display = "block";
+    progressFill.style.width = "0%";
+    progressLabel.textContent = "Connecting…";
+
+    try {
+      const response = await fetch(API_BASE + "/documents/ingest/crawl", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, max_pages: maxPages }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let lastPage = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // Parse SSE lines
+        const lines = buffer.split("\n");
+        buffer = lines.pop(); // keep incomplete last line
+
+        let eventType = "message";
+        for (const line of lines) {
+          if (line.startsWith("event: ")) {
+            eventType = line.slice(7).trim();
+          } else if (line.startsWith("data: ")) {
+            let data;
+            try { data = JSON.parse(line.slice(6)); } catch { continue; }
+
+            if (eventType === "progress") {
+              lastPage = data.page;
+              const pct = Math.min(95, Math.round((data.page / maxPages) * 100));
+              progressFill.style.width = pct + "%";
+              const shortUrl = data.url.replace(/^https?:\/\//, "").slice(0, 45);
+              progressLabel.textContent = `Page ${data.page} / ~${maxPages}: ${shortUrl}`;
+              eventType = "message";
+
+            } else if (eventType === "done") {
+              progressFill.style.width = "100%";
+              progressLabel.textContent = `Done — ${data.pages_crawled} pages crawled`;
+              status.textContent = `✓ Indexed ${data.pages_crawled} pages · ${data.chunks_created} chunks`;
+              status.className = "ingest-status ok";
+
+              const list = document.getElementById("ingestedList");
+              const item = document.createElement("div");
+              item.className = "ingested-item";
+              try {
+                const host = new URL(url).hostname;
+                item.textContent = `✓ ${host} (${data.pages_crawled} pages)`;
+              } catch { item.textContent = `✓ ${url}`; }
+              item.title = url;
+              list.prepend(item);
+              input.value = "";
+              eventType = "message";
+
+            } else if (eventType === "error") {
+              throw new Error(data.detail || "Crawl failed");
+            }
+          }
+        }
+      }
+    } catch (err) {
+      progressWrap.style.display = "none";
+      status.textContent = "✗ " + escapeHtml(err.message || "Unknown error");
+      status.className = "ingest-status err";
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Crawl";
+    }
+  }
+
+  // Allow Enter key in URL input
+  document.getElementById("ingestUrlInput").addEventListener("keydown", function(e) {
+    if (e.key === "Enter") ingestURL();
+  });
 
   // ── Main query ────────────────────────────────────────────────────────────
   let isLoading = false;
