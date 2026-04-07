@@ -45,10 +45,8 @@ def create_app() -> FastAPI:
         ),
         version="0.1.0",
         lifespan=lifespan,
-        root_path="/gotoassistant",
         docs_url="/docs",
         redoc_url="/redoc",
-        servers=[{"url": "/gotoassistant", "description": "GotoAssistant API"}],
     )
 
     # CORS — allow all origins in development, restrict in production
