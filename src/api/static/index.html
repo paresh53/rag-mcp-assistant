@@ -433,60 +433,6 @@
 <div class="main">
   <!-- Sidebar -->
   <div class="sidebar">
-    <div>
-      <h3>Retrieval Settings</h3>
-    </div>
-
-    <div class="form-group">
-      <label for="strategySelect">Strategy</label>
-      <select id="strategySelect">
-        <option value="mmr">MMR (Maximal Marginal Relevance)</option>
-        <option value="similarity">Similarity</option>
-        <option value="hybrid">Hybrid</option>
-      </select>
-    </div>
-
-    <div class="form-group">
-      <label>Documents to retrieve (k = <span id="kVal">5</span>)</label>
-      <div class="range-row">
-        <input type="range" id="kRange" min="1" max="20" value="5" />
-        <span class="range-val" id="kValBig">5</span>
-      </div>
-    </div>
-
-    <div>
-      <h3>Pipeline Options</h3>
-    </div>
-
-    <div>
-      <div class="toggle-row">
-        <span class="toggle-label">Query Expansion</span>
-        <label class="toggle">
-          <input type="checkbox" id="toggleExpansion" checked />
-          <span class="slider"></span>
-        </label>
-      </div>
-      <div class="toggle-row">
-        <span class="toggle-label">Re-ranking</span>
-        <label class="toggle">
-          <input type="checkbox" id="toggleRerank" checked />
-          <span class="slider"></span>
-        </label>
-      </div>
-      <div class="toggle-row">
-        <span class="toggle-label">Compression</span>
-        <label class="toggle">
-          <input type="checkbox" id="toggleCompression" />
-          <span class="slider"></span>
-        </label>
-      </div>
-    </div>
-
-    <div class="form-group">
-      <label for="collectionInput">Collection (optional)</label>
-      <input type="text" id="collectionInput" placeholder="default" style="padding:6px 10px" />
-    </div>
-
     <!-- Add Knowledge section -->
     <div>
       <h3>Add Knowledge</h3>
@@ -587,12 +533,6 @@
     }
   }
   checkHealth();
-
-  // ── Range slider ─────────────────────────────────────────────────────────
-  document.getElementById("kRange").addEventListener("input", function() {
-    document.getElementById("kVal").textContent = this.value;
-    document.getElementById("kValBig").textContent = this.value;
-  });
 
   // ── Auto-resize textarea ──────────────────────────────────────────────────
   const ta = document.getElementById("questionInput");
@@ -851,12 +791,12 @@
 
     const body = {
       question,
-      strategy: document.getElementById("strategySelect").value,
-      k: parseInt(document.getElementById("kRange").value),
-      enable_rerank: document.getElementById("toggleRerank").checked,
-      enable_compression: document.getElementById("toggleCompression").checked,
-      enable_query_expansion: document.getElementById("toggleExpansion").checked,
-      collection: document.getElementById("collectionInput").value.trim(),
+      strategy: "mmr",
+      k: 5,
+      enable_rerank: true,
+      enable_compression: false,
+      enable_query_expansion: true,
+      collection: "",
     };
 
     try {
